@@ -1,6 +1,6 @@
 # vanta-sdk-go
 
-`vanta-sdk-go` is an idiomatic Go client for the Vanta API generated from the Postman collection in this repository and aligned with the public Vanta developer docs.
+`vanta-sdk-go` is an _unofficial_ idiomatic Go client for the Vanta API generated from the Postman collection in this repository and aligned with the public Vanta developer docs.
 
 - Import path: `github.com/richardoc/vanta-sdk-go/v1`
 - Language target: Go `1.26`

@@ -18,6 +18,9 @@ jobs:
   validate:
     name: Validate (Go ${{ matrix.go-version }})
     runs-on: ubuntu-latest
+    env:
+      GOCACHE: ${{ github.workspace }}/.cache/go-build
+      GOMODCACHE: ${{ github.workspace }}/.cache/go-mod
     strategy:
       fail-fast: false
       matrix:
@@ -31,7 +34,18 @@ jobs:
         uses: actions/setup-go@4b73464bb391d4059bd26b0524d20df3927bd417 # tag v6.3.0
         with:
           go-version: ${{ matrix.go-version }}
-          cache: true
+          cache: false
+
+      - name: Restore Go caches
+        uses: actions/cache@cdf6c1fa76f9f475f3d7449005a359c84ca0f306 # tag v5.0.3
+        with:
+          path: |
+            ${{ env.GOCACHE }}
+            ${{ env.GOMODCACHE }}
+          key: ${{ runner.os }}-go-${{ matrix.go-version }}-${{ hashFiles('**/go.sum') }}-${{ hashFiles('**/*.go') }}
+          restore-keys: |
+            ${{ runner.os }}-go-${{ matrix.go-version }}-${{ hashFiles('**/go.sum') }}-
+            ${{ runner.os }}-go-${{ matrix.go-version }}-
 
       - name: Show Go version
         run: go version

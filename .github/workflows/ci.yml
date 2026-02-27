@@ -62,11 +62,6 @@ jobs:
             exit 1
           fi
 
-      - name: Verify generated code is up to date
-        run: |
-          go run ./cmd/vanta-gen
-          git diff --exit-code -- v1/generated_services.go
-
       - name: Verify go fix is clean
         run: |
           go fix ./...

@@ -1,9 +1,9 @@
 # vanta-sdk-go
 
-`vanta-sdk-go` is an _unofficial_ idiomatic Go client for the Vanta API generated from the Postman collection in this repository and aligned with the public Vanta developer docs.
+`vanta-sdk-go` is an _unofficial_ idiomatic Go client for the Vanta API, aligned with the public Vanta developer docs and the Postman collection in this repository.
 
 - Import path: `github.com/richardoc/vanta-sdk-go/v1`
-- Language target: Go `1.26`
+- Minimum Go version: `1.26` (from `go.mod`)
 - Auth: OAuth client credentials (built-in) or static bearer token
 - Surface: generated services and endpoint methods from the collection
 - Pagination: explicit `pageCursor/pageSize` params + generic pager helper
@@ -82,18 +82,6 @@ Non-2xx responses are returned as `*vanta.APIError` with:
 - `Status`
 - raw `Body`
 - parsed JSON body when available (`ParsedBody`)
-
-## Regeneration
-
-Primary generator:
-
-```bash
-go run ./cmd/vanta-gen
-```
-
-Generated output file:
-
-- `v1/generated_services.go`
 
 ## Notes
 

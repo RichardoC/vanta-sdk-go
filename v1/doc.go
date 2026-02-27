@@ -1,4 +1,2 @@
-// Package v1 provides a generated and typed client for Vanta APIs.
-//
-//go:generate go run ../cmd/vanta-gen
+// Package v1 provides a typed client for Vanta APIs.
 package v1

@@ -13,7 +13,8 @@ import (
 )
 
 const (
-	defaultAPIBaseURL   = "https://api.vanta.com"
+	defaultAPIBaseURL   = "https://api.vanta.com/v1"
+	defaultAuthBaseURL  = "https://api.vanta.com"
 	defaultOAuthPath    = "/oauth/token"
 	defaultUserAgent    = "vanta-sdk-go/0.1"
 	contentTypeJSON     = "application/json"

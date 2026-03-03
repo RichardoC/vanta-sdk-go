@@ -87,4 +87,5 @@ Non-2xx responses are returned as `*vanta.APIError` with:
 
 - Retries are intentionally **not** enabled in-library.
 - Multipart endpoints are supported via generated `FormData` fields.
-- Base API URL defaults to `https://api.vanta.com`.
+- Base API URL defaults to `https://api.vanta.com/v1`.
+- OAuth token URL defaults to `https://api.vanta.com/oauth/token`.

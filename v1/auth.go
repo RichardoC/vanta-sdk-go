@@ -80,7 +80,7 @@ func NewOAuthClientCredentialsTokenSource(cfg OAuthClientCredentialsConfig) (*OA
 		return nil, fmt.Errorf("client secret must not be empty")
 	}
 	if cfg.AuthURL == "" {
-		cfg.AuthURL = defaultAPIBaseURL + defaultOAuthPath
+		cfg.AuthURL = defaultAuthBaseURL + defaultOAuthPath
 	}
 	if cfg.HTTPClient == nil {
 		cfg.HTTPClient = &http.Client{Timeout: 15 * time.Second}

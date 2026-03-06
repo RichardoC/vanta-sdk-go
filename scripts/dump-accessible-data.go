@@ -137,8 +137,8 @@ func listCallableMethods(serviceValue reflect.Value) []string {
 		strings.EqualFold(strings.TrimSpace(os.Getenv("VANTA_INCLUDE_MUTATIONS")), "true")
 
 	methods := make([]string, 0, serviceType.NumMethod())
-	for i := 0; i < serviceType.NumMethod(); i++ {
-		m := serviceType.Method(i)
+	for m := range serviceType.Methods() {
+		m := m
 		if !includeMutations && !isLikelyReadOnlyMethod(m.Name) {
 			continue
 		}
@@ -151,16 +151,16 @@ func listCallableMethods(serviceValue reflect.Value) []string {
 		if mt.NumIn() != 2 {
 			continue
 		}
-		if mt.In(0) != reflect.TypeOf((*context.Context)(nil)).Elem() {
+		if mt.In(0) != reflect.TypeFor[context.Context]() {
 			continue
 		}
-		if mt.In(1).Kind() != reflect.Ptr {
+		if mt.In(1).Kind() != reflect.Pointer {
 			continue
 		}
 		if mt.NumOut() != 2 {
 			continue
 		}
-		if !mt.Out(1).Implements(reflect.TypeOf((*error)(nil)).Elem()) {
+		if !mt.Out(1).Implements(reflect.TypeFor[error]()) {
 			continue
 		}
 		methods = append(methods, m.Name)
@@ -208,7 +208,7 @@ func callServiceMethod(ctx context.Context, serviceName string, serviceValue ref
 	}
 
 	respVal := outs[0]
-	if !respVal.IsValid() || (respVal.Kind() == reflect.Ptr && respVal.IsNil()) {
+	if !respVal.IsValid() || (respVal.Kind() == reflect.Pointer && respVal.IsNil()) {
 		result.Status = "ok"
 		result.File = ""
 		return result
@@ -276,7 +276,7 @@ func callPaginatedMethod(ctx context.Context, serviceName string, serviceValue r
 		}
 
 		respVal := outs[0]
-		if !respVal.IsValid() || (respVal.Kind() == reflect.Ptr && respVal.IsNil()) {
+		if !respVal.IsValid() || (respVal.Kind() == reflect.Pointer && respVal.IsNil()) {
 			result.Status = "ok"
 			result.Pages = pageNum
 			return result
@@ -308,7 +308,7 @@ func buildParams(paramType reflect.Type, pageSize int, cursor string) reflect.Va
 	elem := params.Elem()
 
 	if f := elem.FieldByName("PageSize"); f.IsValid() && f.CanSet() {
-		if f.Kind() == reflect.Ptr && f.Type().Elem().Kind() == reflect.Int {
+		if f.Kind() == reflect.Pointer && f.Type().Elem().Kind() == reflect.Int {
 			v := reflect.New(f.Type().Elem())
 			v.Elem().SetInt(int64(pageSize))
 			f.Set(v)
@@ -316,7 +316,7 @@ func buildParams(paramType reflect.Type, pageSize int, cursor string) reflect.Va
 	}
 	if cursor != "" {
 		if f := elem.FieldByName("PageCursor"); f.IsValid() && f.CanSet() {
-			if f.Kind() == reflect.Ptr && f.Type().Elem().Kind() == reflect.String {
+			if f.Kind() == reflect.Pointer && f.Type().Elem().Kind() == reflect.String {
 				v := reflect.New(f.Type().Elem())
 				v.Elem().SetString(cursor)
 				f.Set(v)

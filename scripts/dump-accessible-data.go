@@ -138,7 +138,6 @@ func listCallableMethods(serviceValue reflect.Value) []string {
 
 	methods := make([]string, 0, serviceType.NumMethod())
 	for m := range serviceType.Methods() {
-		m := m
 		if !includeMutations && !isLikelyReadOnlyMethod(m.Name) {
 			continue
 		}

@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"log"
+	"maps"
 	"reflect"
 	"strings"
 	"sync"
@@ -19,7 +20,7 @@ var (
 	unknownFieldWarningsSeen = map[string]struct{}{}
 )
 
-var jsonRawMessageType = reflect.TypeOf(json.RawMessage{})
+var jsonRawMessageType = reflect.TypeFor[json.RawMessage]()
 
 func decodeJSONBytes(data []byte, out any) error {
 	if err := json.Unmarshal(data, out); err != nil {
@@ -122,8 +123,7 @@ func walkUnknownFields(t reflect.Type, raw any, path string) {
 
 func jsonFieldsForType(t reflect.Type) map[string]reflect.Type {
 	fields := map[string]reflect.Type{}
-	for i := 0; i < t.NumField(); i++ {
-		field := t.Field(i)
+	for field := range t.Fields() {
 		if field.PkgPath != "" && !field.Anonymous {
 			continue
 		}
@@ -132,9 +132,7 @@ func jsonFieldsForType(t reflect.Type) map[string]reflect.Type {
 			if embedded == nil || embedded.Kind() != reflect.Struct {
 				continue
 			}
-			for name, embeddedType := range jsonFieldsForType(embedded) {
-				fields[name] = embeddedType
-			}
+			maps.Copy(fields, jsonFieldsForType(embedded))
 			continue
 		}
 

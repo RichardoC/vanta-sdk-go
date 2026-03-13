@@ -127,7 +127,14 @@ func (c *Client) doJSON(req *http.Request, out any) error {
 	if out == nil || resp.StatusCode == http.StatusNoContent {
 		return nil
 	}
-	if err := json.NewDecoder(resp.Body).Decode(out); err != nil {
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return fmt.Errorf("read response JSON: %w", err)
+	}
+	if len(body) == 0 {
+		return nil
+	}
+	if err := decodeJSONBytes(body, out); err != nil {
 		if err == io.EOF {
 			return nil
 		}

@@ -2,8 +2,10 @@ package v1
 
 import (
 	"context"
+	"fmt"
 	"io"
 	"net/http"
+	"net/url"
 	"strings"
 	"testing"
 )
@@ -58,5 +60,67 @@ func TestDefaultBaseURLTargetsV1PeopleEndpoint(t *testing.T) {
 	want := "https://api.vanta.com/v1/people"
 	if gotURL != want {
 		t.Fatalf("ListPeople requested %q, want %q", gotURL, want)
+	}
+}
+
+func TestDoJSONWarnsOnUnknownFields(t *testing.T) {
+	resetUnknownFieldWarningsForTest()
+	t.Cleanup(resetUnknownFieldWarningsForTest)
+
+	var warnings []string
+	previous := UnknownFieldWarningf
+	UnknownFieldWarningf = func(format string, args ...any) {
+		warnings = append(warnings, fmt.Sprintf(format, args...))
+	}
+	t.Cleanup(func() {
+		UnknownFieldWarningf = previous
+	})
+
+	httpClient := &http.Client{
+		Transport: roundTripFunc(func(r *http.Request) (*http.Response, error) {
+			return &http.Response{
+				StatusCode: http.StatusOK,
+				Status:     "200 OK",
+				Header:     http.Header{"Content-Type": []string{"application/json"}},
+				Body: io.NopCloser(strings.NewReader(
+					`{"item":{"name":"ok","newNestedField":true},"newRootField":1}`,
+				)),
+			}, nil
+		}),
+	}
+
+	c, err := NewClient(WithHTTPClient(httpClient))
+	if err != nil {
+		t.Fatalf("NewClient returned error: %v", err)
+	}
+
+	req, err := c.newRequest(context.Background(), http.MethodGet, "/test", url.Values{}, nil)
+	if err != nil {
+		t.Fatalf("newRequest returned error: %v", err)
+	}
+
+	type nested struct {
+		Name string `json:"name"`
+	}
+	type sampleResponse struct {
+		Item nested `json:"item"`
+	}
+
+	var out sampleResponse
+	if err := c.doJSON(req, &out); err != nil {
+		t.Fatalf("doJSON returned error: %v", err)
+	}
+	if out.Item.Name != "ok" {
+		t.Fatalf("decoded response = %+v", out)
+	}
+
+	joined := strings.Join(warnings, "\n")
+	for _, want := range []string{
+		"sampleResponse.newRootField",
+		"sampleResponse.item.newNestedField",
+	} {
+		if !strings.Contains(joined, want) {
+			t.Fatalf("warnings %q do not contain %q", joined, want)
+		}
 	}
 }

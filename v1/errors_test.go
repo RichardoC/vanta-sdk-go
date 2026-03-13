@@ -1,6 +1,7 @@
 package v1
 
 import (
+	"fmt"
 	"net/http"
 	"strings"
 	"testing"
@@ -33,5 +34,44 @@ func TestDecodeInvalidRaw(t *testing.T) {
 	}
 	if !strings.Contains(err.Error(), "decode JSON payload") {
 		t.Fatalf("unexpected error: %v", err)
+	}
+}
+
+func TestDecodeWarnsOnUnknownFields(t *testing.T) {
+	resetUnknownFieldWarningsForTest()
+	t.Cleanup(resetUnknownFieldWarningsForTest)
+
+	var warnings []string
+	previous := UnknownFieldWarningf
+	UnknownFieldWarningf = func(format string, args ...any) {
+		warnings = append(warnings, fmt.Sprintf(format, args...))
+	}
+	t.Cleanup(func() {
+		UnknownFieldWarningf = previous
+	})
+
+	type nested struct {
+		Name string `json:"name"`
+	}
+	type sample struct {
+		Item nested `json:"item"`
+	}
+
+	out, err := Decode[sample]([]byte(`{"item":{"name":"ok","newNestedField":true},"newRootField":1}`))
+	if err != nil {
+		t.Fatalf("unexpected decode error: %v", err)
+	}
+	if out.Item.Name != "ok" {
+		t.Fatalf("decoded item = %+v", out.Item)
+	}
+
+	joined := strings.Join(warnings, "\n")
+	for _, want := range []string{
+		"sample.newRootField",
+		"sample.item.newNestedField",
+	} {
+		if !strings.Contains(joined, want) {
+			t.Fatalf("warnings %q do not contain %q", joined, want)
+		}
 	}
 }

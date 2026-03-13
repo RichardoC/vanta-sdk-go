@@ -4,7 +4,9 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"io"
 	"log"
+	"net/http"
 	"os"
 	"path/filepath"
 	"reflect"
@@ -27,6 +29,47 @@ type callResult struct {
 
 var safeName = regexp.MustCompile(`[^a-zA-Z0-9._-]+`)
 
+type responseRecorder struct {
+	transport http.RoundTripper
+	lastBody  []byte
+}
+
+func newResponseRecorder(base http.RoundTripper) *responseRecorder {
+	if base == nil {
+		base = http.DefaultTransport
+	}
+	return &responseRecorder{transport: base}
+}
+
+func (r *responseRecorder) RoundTrip(req *http.Request) (*http.Response, error) {
+	resp, err := r.transport.RoundTrip(req)
+	if err != nil {
+		return nil, err
+	}
+	if resp == nil || resp.Body == nil {
+		r.lastBody = nil
+		return resp, nil
+	}
+
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		_ = resp.Body.Close()
+		return nil, err
+	}
+	_ = resp.Body.Close()
+
+	r.lastBody = append(r.lastBody[:0], body...)
+	resp.Body = io.NopCloser(strings.NewReader(string(body)))
+	return resp, nil
+}
+
+func (r *responseRecorder) LastBody() json.RawMessage {
+	if len(r.lastBody) == 0 {
+		return nil
+	}
+	return append(json.RawMessage(nil), r.lastBody...)
+}
+
 func main() {
 	ctx := context.Background()
 	outDir := strings.TrimSpace(os.Getenv("VANTA_DUMP_DIR"))
@@ -38,12 +81,12 @@ func main() {
 		log.Fatalf("create output dir: %v", err)
 	}
 
-	client, err := newVantaClient(ctx)
+	client, recorder, err := newVantaClient(ctx)
 	if err != nil {
 		log.Fatalf("create client: %v", err)
 	}
 
-	results, err := dumpAllCallableEndpoints(ctx, client, outDir)
+	results, err := dumpAllCallableEndpoints(ctx, client, recorder, outDir)
 	if err != nil {
 		log.Fatalf("dump endpoints: %v", err)
 	}
@@ -73,21 +116,27 @@ func main() {
 	fmt.Printf("Output directory: %s\n", outDir)
 }
 
-func newVantaClient(ctx context.Context) (*vanta.Client, error) {
+func newVantaClient(ctx context.Context) (*vanta.Client, *responseRecorder, error) {
 	opts := make([]vanta.Option, 0, 2)
+	recorder := newResponseRecorder(http.DefaultTransport)
+	opts = append(opts, vanta.WithHTTPClient(&http.Client{
+		Timeout:   30 * time.Second,
+		Transport: recorder,
+	}))
 	if baseURL := strings.TrimSpace(os.Getenv("VANTA_BASE_URL")); baseURL != "" {
 		opts = append(opts, vanta.WithBaseURL(baseURL))
 	}
 
 	if token := strings.TrimSpace(os.Getenv("VANTA_BEARER_TOKEN")); token != "" {
 		opts = append(opts, vanta.WithTokenSource(vanta.StaticTokenSource(token)))
-		return vanta.NewClient(opts...)
+		client, err := vanta.NewClient(opts...)
+		return client, recorder, err
 	}
 
 	clientID := strings.TrimSpace(os.Getenv("VANTA_CLIENT_ID"))
 	clientSecret := strings.TrimSpace(os.Getenv("VANTA_CLIENT_SECRET"))
 	if clientID == "" || clientSecret == "" {
-		return nil, fmt.Errorf("set either VANTA_BEARER_TOKEN or both VANTA_CLIENT_ID and VANTA_CLIENT_SECRET")
+		return nil, nil, fmt.Errorf("set either VANTA_BEARER_TOKEN or both VANTA_CLIENT_ID and VANTA_CLIENT_SECRET")
 	}
 
 	scope := strings.TrimSpace(os.Getenv("VANTA_SCOPE"))
@@ -101,14 +150,15 @@ func newVantaClient(ctx context.Context) (*vanta.Client, error) {
 		Scope:        scope,
 	})
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 
 	opts = append(opts, vanta.WithTokenSource(ts))
-	return vanta.NewClient(opts...)
+	client, err := vanta.NewClient(opts...)
+	return client, recorder, err
 }
 
-func dumpAllCallableEndpoints(ctx context.Context, client *vanta.Client, outDir string) ([]callResult, error) {
+func dumpAllCallableEndpoints(ctx context.Context, client *vanta.Client, recorder *responseRecorder, outDir string) ([]callResult, error) {
 	servicesVal := reflect.ValueOf(client.Services).Elem()
 	servicesType := servicesVal.Type()
 	results := make([]callResult, 0, 256)
@@ -123,7 +173,7 @@ func dumpAllCallableEndpoints(ctx context.Context, client *vanta.Client, outDir 
 
 		serviceMethods := listCallableMethods(serviceValue)
 		for _, methodName := range serviceMethods {
-			res := callServiceMethod(ctx, serviceName, serviceValue, methodName, outDir)
+			res := callServiceMethod(ctx, serviceName, serviceValue, methodName, recorder, outDir)
 			results = append(results, res)
 		}
 	}
@@ -172,9 +222,9 @@ func isLikelyReadOnlyMethod(name string) bool {
 	return strings.HasPrefix(name, "Get") || strings.HasPrefix(name, "List")
 }
 
-func callServiceMethod(ctx context.Context, serviceName string, serviceValue reflect.Value, methodName, outDir string) callResult {
+func callServiceMethod(ctx context.Context, serviceName string, serviceValue reflect.Value, methodName string, recorder *responseRecorder, outDir string) callResult {
 	if strings.HasPrefix(methodName, "List") {
-		return callPaginatedMethod(ctx, serviceName, serviceValue, methodName, outDir)
+		return callPaginatedMethod(ctx, serviceName, serviceValue, methodName, recorder, outDir)
 	}
 
 	result := callResult{Service: serviceName, Method: methodName, Status: "error"}
@@ -216,7 +266,7 @@ func callServiceMethod(ctx context.Context, serviceName string, serviceValue ref
 	fileName := sanitize(fmt.Sprintf("%s_%s.json", serviceName, methodName))
 	filePath := filepath.Join(outDir, fileName)
 
-	if err := writeResponse(filePath, respVal.Interface()); err != nil {
+	if err := writeResponse(filePath, responsePayload(respVal.Interface(), recorder)); err != nil {
 		result.Error = fmt.Sprintf("write response: %v", err)
 		return result
 	}
@@ -226,7 +276,7 @@ func callServiceMethod(ctx context.Context, serviceName string, serviceValue ref
 	return result
 }
 
-func callPaginatedMethod(ctx context.Context, serviceName string, serviceValue reflect.Value, methodName, outDir string) callResult {
+func callPaginatedMethod(ctx context.Context, serviceName string, serviceValue reflect.Value, methodName string, recorder *responseRecorder, outDir string) callResult {
 	result := callResult{Service: serviceName, Method: methodName, Status: "error"}
 	method := serviceValue.MethodByName(methodName)
 	if !method.IsValid() {
@@ -283,7 +333,8 @@ func callPaginatedMethod(ctx context.Context, serviceName string, serviceValue r
 
 		fileName := sanitize(fmt.Sprintf("%s_%s_page_%03d.json", serviceName, methodName, pageNum))
 		filePath := filepath.Join(outDir, fileName)
-		if err := writeResponse(filePath, respVal.Interface()); err != nil {
+		payload := responsePayload(respVal.Interface(), recorder)
+		if err := writeResponse(filePath, payload); err != nil {
 			result.Error = fmt.Sprintf("write response: %v", err)
 			return result
 		}
@@ -292,7 +343,7 @@ func callPaginatedMethod(ctx context.Context, serviceName string, serviceValue r
 			wroteAny = true
 		}
 
-		hasNext, endCursor, ok := extractPageInfo(respVal.Interface())
+		hasNext, endCursor, ok := extractPageInfo(payload)
 		if !ok || !hasNext || endCursor == "" || endCursor == cursor {
 			result.Status = "ok"
 			result.Pages = pageNum
@@ -353,6 +404,16 @@ func extractPageInfo(payload any) (bool, string, bool) {
 	hasNext, _ := pageInfo["hasNextPage"].(bool)
 	endCursor, _ := pageInfo["endCursor"].(string)
 	return hasNext, endCursor, true
+}
+
+func responsePayload(fallback any, recorder *responseRecorder) any {
+	if recorder == nil {
+		return fallback
+	}
+	if raw := recorder.LastBody(); len(raw) > 0 {
+		return raw
+	}
+	return fallback
 }
 
 func writeResponse(path string, payload any) error {

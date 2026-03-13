@@ -2123,11 +2123,16 @@ func (s *PeopleService) ListPeople(ctx context.Context, params *PeopleListPeople
 }
 
 type PeopleMarkAsNotPeopleRequestBody struct {
-	Updates []map[string]any `json:"updates"`
+	Updates []PeopleMarkAsNotPeopleUpdate `json:"updates"`
 }
 
 type PeopleMarkAsNotPeopleResponse struct {
-	Results []map[string]any `json:"results"`
+	Results []PeopleBulkUpdateResult `json:"results"`
+}
+
+type PeopleMarkAsNotPeopleUpdate struct {
+	ID     string `json:"id"`
+	Reason string `json:"reason"`
 }
 
 type PeopleMarkAsNotPeopleParams struct {
@@ -2153,11 +2158,15 @@ func (s *PeopleService) MarkAsNotPeople(ctx context.Context, params *PeopleMarkA
 }
 
 type PeopleMarkAsPeopleRequestBody struct {
-	Updates []map[string]any `json:"updates"`
+	Updates []PeopleMarkAsPeopleUpdate `json:"updates"`
 }
 
 type PeopleMarkAsPeopleResponse struct {
-	Results []map[string]any `json:"results"`
+	Results []PeopleBulkUpdateResult `json:"results"`
+}
+
+type PeopleMarkAsPeopleUpdate struct {
+	ID string `json:"id"`
 }
 
 type PeopleMarkAsPeopleParams struct {
@@ -2183,11 +2192,22 @@ func (s *PeopleService) MarkAsPeople(ctx context.Context, params *PeopleMarkAsPe
 }
 
 type PeopleOffboardPeopleRequestBody struct {
-	Updates []map[string]any `json:"updates"`
+	Updates []PeopleOffboardPeopleUpdate `json:"updates"`
 }
 
 type PeopleOffboardPeopleResponse struct {
-	Results []map[string]any `json:"results"`
+	Results []PeopleBulkUpdateResult `json:"results"`
+}
+
+type PeopleOffboardPeopleUpdate struct {
+	AcknowledgerID string `json:"acknowledgerId"`
+	ID             string `json:"id"`
+}
+
+type PeopleBulkUpdateResult struct {
+	ID      string  `json:"id"`
+	Status  string  `json:"status"`
+	Message *string `json:"message"`
 }
 
 type PeopleOffboardPeopleParams struct {
@@ -2271,8 +2291,20 @@ func (s *PeopleService) SetLeaveInformation(ctx context.Context, params *PeopleS
 }
 
 type PeopleUpdatePersonMetadataRequestBody struct {
-	Employment map[string]any `json:"employment"`
-	Name       map[string]any `json:"name"`
+	Employment *PeopleUpdatePersonMetadataEmployment `json:"employment,omitempty"`
+	Name       *PeopleUpdatePersonMetadataName       `json:"name,omitempty"`
+}
+
+type PeopleUpdatePersonMetadataEmployment struct {
+	EndDate   *string `json:"endDate,omitempty"`
+	JobTitle  *string `json:"jobTitle,omitempty"`
+	StartDate *string `json:"startDate,omitempty"`
+	Status    *string `json:"status,omitempty"`
+}
+
+type PeopleUpdatePersonMetadataName struct {
+	First *string `json:"first,omitempty"`
+	Last  *string `json:"last,omitempty"`
 }
 
 type PeopleUpdatePersonMetadataParams struct {

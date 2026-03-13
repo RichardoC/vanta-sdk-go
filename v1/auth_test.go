@@ -3,6 +3,7 @@ package v1
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"io"
 	"net/http"
 	"strings"
@@ -69,6 +70,61 @@ func TestOAuthClientCredentialsTokenSourceCachesToken(t *testing.T) {
 	}
 	if got := atomic.LoadInt32(&calls); got != 1 {
 		t.Fatalf("oauth endpoint calls = %d, want 1", got)
+	}
+}
+
+func TestOAuthClientCredentialsTokenSourceWarnsOnUnknownFields(t *testing.T) {
+	resetUnknownFieldWarningsForTest()
+	t.Cleanup(resetUnknownFieldWarningsForTest)
+
+	var warnings []string
+	previous := UnknownFieldWarningf
+	UnknownFieldWarningf = func(format string, args ...any) {
+		warnings = append(warnings, fmt.Sprintf(format, args...))
+	}
+	t.Cleanup(func() {
+		UnknownFieldWarningf = previous
+	})
+
+	mockClient := &http.Client{
+		Transport: roundTripFunc(func(r *http.Request) (*http.Response, error) {
+			payload, _ := json.Marshal(map[string]any{
+				"access_token": "token-1",
+				"token_type":   "Bearer",
+				"expires_in":   3600,
+				"new_field":    true,
+			})
+			return &http.Response{
+				StatusCode: http.StatusOK,
+				Status:     "200 OK",
+				Header:     http.Header{"Content-Type": []string{"application/json"}},
+				Body:       io.NopCloser(strings.NewReader(string(payload))),
+			}, nil
+		}),
+	}
+
+	src, err := NewOAuthClientCredentialsTokenSource(OAuthClientCredentialsConfig{
+		ClientID:     "id",
+		ClientSecret: "secret",
+		AuthURL:      "https://api.vanta.com/oauth/token",
+		HTTPClient:   mockClient,
+		RefreshSkew:  time.Minute,
+	})
+	if err != nil {
+		t.Fatalf("unexpected constructor error: %v", err)
+	}
+
+	tok, err := src.Token(context.Background())
+	if err != nil {
+		t.Fatalf("token error: %v", err)
+	}
+	if tok.AccessToken != "token-1" {
+		t.Fatalf("access token = %q, want token-1", tok.AccessToken)
+	}
+
+	joined := strings.Join(warnings, "\n")
+	if !strings.Contains(joined, "tokenResponse.new_field") {
+		t.Fatalf("warnings %q do not contain tokenResponse.new_field", joined)
 	}
 }
 

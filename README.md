@@ -60,6 +60,8 @@ func main() {
 
 Generated methods return per-operation typed response structs inferred from response examples and expose typed request body structs for JSON endpoints.
 
+Typed JSON decoding emits a warning once per unknown response field path via `vanta.UnknownFieldWarningf`. Set `vanta.UnknownFieldWarningf = nil` if you need to suppress those warnings.
+
 ## Authentication Options
 
 - Built-in OAuth client credentials flow via `NewOAuthClientCredentialsTokenSource`.

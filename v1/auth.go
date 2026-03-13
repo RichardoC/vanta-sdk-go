@@ -5,6 +5,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"io"
 	"net/http"
 	"sync"
 	"time"
@@ -158,7 +159,11 @@ func (s *OAuthClientCredentialsTokenSource) fetchToken(ctx context.Context) (Tok
 	}
 
 	var tr tokenResponse
-	if err := json.NewDecoder(resp.Body).Decode(&tr); err != nil {
+	body, readErr := io.ReadAll(resp.Body)
+	if readErr != nil {
+		return Token{}, fmt.Errorf("read oauth token response: %w", readErr)
+	}
+	if err := decodeJSONBytes(body, &tr); err != nil {
 		return Token{}, fmt.Errorf("decode oauth token response: %w", err)
 	}
 	if tr.AccessToken == "" {

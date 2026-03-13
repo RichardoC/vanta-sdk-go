@@ -11,7 +11,7 @@ func Decode[T any](raw json.RawMessage) (T, error) {
 	if len(raw) == 0 {
 		return out, nil
 	}
-	if err := json.Unmarshal(raw, &out); err != nil {
+	if err := decodeJSONBytes(raw, &out); err != nil {
 		return out, fmt.Errorf("decode JSON payload: %w", err)
 	}
 	return out, nil
